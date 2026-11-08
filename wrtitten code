@@ -1,0 +1,98 @@
+
+const { test, expect } = require('@playwright/test');
+
+test('cart total is correctly calculated', async ({ page }) => {
+
+  // 1. Login
+  await page.goto('https://www.saucedemo.com/');
+
+  await page.getByPlaceholder('Username').fill('standard_user');
+  await page.getByPlaceholder('Password').fill('secret_sauce');
+  await page.getByRole('button', { name: 'Login' }).click();
+
+  // 2. Verify successful login
+  await expect(page).toHaveURL(/inventory\.html/);
+  await expect(
+    page.getByText('Products', { exact: true })
+  ).toBeVisible();
+
+  // 3. Add a specific product to cart
+  const product = page.locator('.inventory_item')
+    .filter({ hasText: 'Sauce Labs Backpack' });
+
+  await product.getByRole('button', { name: 'Add to cart' }).click();
+
+  // 4. Verify cart badge
+  await expect(page.locator('.shopping_cart_badge')).toHaveText('1');
+
+  // 5. Open cart and verify product
+  await page.locator('.shopping_cart_link').click();
+
+  await expect(
+    page.locator('.cart_item')
+  ).toHaveCount(1);
+
+  await expect(
+    page.getByText('Sauce Labs Backpack', { exact: true })
+  ).toBeVisible();
+
+  // 6. Checkout
+  await page.getByRole('button', { name: 'Checkout' }).click();
+
+  await page.locator('#first-name').fill('A');
+  await page.locator('#last-name').fill('B');
+  await page.locator('#postal-code').fill('12345');
+
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  // 7. Verify checkout overview
+  await expect(page).toHaveURL(/checkout-step-two\.html/);
+
+  // 8. Extract product price
+  const priceText = await page
+    .locator('.inventory_item_price')
+    .textContent();
+
+  const productPrice = Number(priceText.replace('$', ''));
+
+  // 9. Calculate expected subtotal, tax and total
+  const expectedSubtotal = productPrice;
+  const expectedTax = Math.round(expectedSubtotal * 0.08 * 100) / 100;
+  const expectedTotal = expectedSubtotal + expectedTax;
+
+  // 10. Read actual subtotal
+  const subtotalText = await page
+    .locator('.summary_subtotal_label')
+    .textContent();
+
+  const actualSubtotal = Number(
+    subtotalText.match(/\$([\d.]+)/)[1]
+  );
+
+  // 11. Read actual tax
+  const taxText = await page
+    .locator('.summary_tax_label')
+    .textContent();
+
+  const actualTax = Number(
+    taxText.match(/\$([\d.]+)/)[1]
+  );
+
+  // 12. Read actual total
+  const totalText = await page
+    .locator('.summary_total_label')
+    .textContent();
+
+  const actualTotal = Number(
+    totalText.match(/\$([\d.]+)/)[1]
+  );
+
+  // 13. Validate calculations
+  expect(actualSubtotal).toBe(expectedSubtotal);
+  expect(actualTax).toBe(expectedTax);
+  expect(actualTotal).toBe(expectedTotal);
+
+  // 14. Validate total calculation independently
+  expect(actualTotal).toBe(actualSubtotal + actualTax);
+
+});
